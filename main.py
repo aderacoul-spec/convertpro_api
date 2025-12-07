@@ -1,3 +1,19 @@
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
+import uuid, os
+from pdf2docx import Converter
+
+app = FastAPI()
+
+TMP_DIR = "/tmp/convertpro"
+os.makedirs(TMP_DIR, exist_ok=True)
+
+
+@app.get("/")
+def home():
+    return {"message": "ConvertPro API Running OK"}
+
+
 @app.post("/convert/pdf-to-word-pro")
 async def convert_pdf_word(file: UploadFile = File(...)):
     try:

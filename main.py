@@ -10,10 +10,10 @@ import requests
 
 app = FastAPI()
 
-# Autoriser ton site ConvertPro à appeler cette API
+# CORS → Permet d'appeler depuis ton site ConvertPro
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Ensuite remplace par ton domaine
+    allow_origins=["*"],  # Ensuite mettre https://convertpro.shop
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -21,161 +21,140 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"status": "API RUNNING OK"}
+    return {"status": "API RUNNING"}
 
 
-# ---------------------------------------------------------
-#           PDF → WORD (PRO)
-# ---------------------------------------------------------
+# ----------------------------------------------------------
+# PDF → WORD PRO
+# ----------------------------------------------------------
 @app.post("/convert/pdf-to-word-pro")
-async def convert_pdf_to_word_pro(file: UploadFile = File(...)):
+async def convert_pdf_to_word(file: UploadFile = File(...)):
     try:
         pdf_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        output_docx = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+        docx_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
 
         pdf_temp.write(await file.read())
         pdf_temp.close()
 
         cv = Converter(pdf_temp.name)
-        cv.convert(output_docx.name, start=0, end=None)
+        cv.convert(docx_temp.name)
         cv.close()
 
         return FileResponse(
-            output_docx.name,
+            docx_temp.name,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             filename=file.filename.replace(".pdf", "_converted.docx")
         )
 
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "PDF→Word conversion failed", "details": str(e)}
-        )
+        return JSONResponse({"error": "PDF→Word failed", "details": str(e)}, status_code=500)
 
 
-# ---------------------------------------------------------
-#           PDF → WORD GOLD OCR
-# ---------------------------------------------------------
+# ----------------------------------------------------------
+# PDF → WORD GOLD (OCR)
+# ----------------------------------------------------------
 @app.post("/convert/pdf-to-word-gold")
 async def convert_pdf_gold(file: UploadFile = File(...)):
     try:
         pdf_bytes = await file.read()
 
-        files = { "file": (file.filename, pdf_bytes, "application/pdf") }
-
-        response = requests.post(
+        res = requests.post(
             "https://api.ocr.space/parse/image",
-            files=files,
-            data={"apikey": "helloworld"}  # gratuit mais limité
+            files={"file": (file.filename, pdf_bytes, "application/pdf")},
+            data={"apikey": "helloworld"}
         )
 
-        if response.status_code != 200:
-            return JSONResponse(status_code=500, content={"error": "OCR API failed"})
+        result = res.json()
 
-        result = response.json()
+        print("OCR RESULT =", result)  # LOG
 
         if "ParsedResults" not in result:
-            return JSONResponse(status_code=500, content={"error": "No OCR result"})
+            return JSONResponse({"error": "OCR failed", "details": result}, status_code=500)
 
-        extracted_text = result["ParsedResults"][0].get("ParsedText", "")
+        text = result["ParsedResults"][0].get("ParsedText", "")
 
         doc = Document()
-        doc.add_paragraph(extracted_text)
+        doc.add_paragraph(text)
 
-        output_path = f"/tmp/{file.filename.replace('.pdf', '')}_OCR.docx"
-        doc.save(output_path)
+        out_file = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+        doc.save(out_file.name)
 
-        return FileResponse(
-            output_path,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename="converted_OCR.docx"
-        )
+        return FileResponse(out_file.name, filename="ocr_converted.docx")
 
     except Exception as e:
-        return JSONResponse(status_code=500,
-            content={"error": "OCR conversion failed", "details": str(e)})
+        return JSONResponse({"error": "OCR conversion failed", "details": str(e)}, status_code=500)
 
 
-# ---------------------------------------------------------
-#           IMAGE → PDF
-# ---------------------------------------------------------
+# ----------------------------------------------------------
+# IMAGE → PDF
+# ----------------------------------------------------------
 @app.post("/convert/image-to-pdf")
-async def convert_image_to_pdf(file: UploadFile = File(...)):
+async def convert_img_to_pdf(file: UploadFile = File(...)):
     try:
-        img_bytes = await file.read()
-        ext = os.path.splitext(file.filename)[1]
-
+        ext = os.path.splitext(file.filename)[1].lower()
         img_temp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-        img_temp.write(img_bytes)
+        img_temp.write(await file.read())
         img_temp.close()
 
-        output_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        img = Image.open(img_temp.name).convert("RGB")
+        pdf_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        img.save(pdf_temp.name, "PDF")
 
-        img = Image.open(img_temp.name)
-        img = img.convert("RGB")
-        img.save(output_pdf.name, "PDF")
-
-        return FileResponse(
-            output_pdf.name,
-            media_type="application/pdf",
-            filename=file.filename.replace(ext, ".pdf")
-        )
+        return FileResponse(pdf_temp.name, filename=file.filename.replace(ext, ".pdf"))
 
     except Exception as e:
-        return JSONResponse(status_code=500,
-            content={"error": "Image→PDF conversion failed", "details": str(e)})
+        return JSONResponse({"error": "Image→PDF failed", "details": str(e)}, status_code=500)
 
 
-# ---------------------------------------------------------
-#           WORD → PDF  (Cloud API ✓ fonctionne Linux)
-# ---------------------------------------------------------
+# ----------------------------------------------------------
+# WORD → PDF (API ConvertAPI)
+# ----------------------------------------------------------
 @app.post("/convert/word-to-pdf")
 async def convert_word_to_pdf(file: UploadFile = File(...)):
     try:
         word_bytes = await file.read()
 
-        files = {
-            "file": (
-                file.filename,
-                word_bytes,
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-        }
-
-        # ⚠ IMPORTANT — remplace XXXXX par ton vrai secret
+        # ⚠️ COLLE TON SECRET COMPLET EXACTEMENT ICI
         api_secret = "LzWmFyBCAA0GGYxdXRCdu1SoL1oDdWt9"
 
-        response = requests.post(
-            f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={api_secret}",
-            files=files,
+        api_url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={api_secret}"
+
+        res = requests.post(
+            api_url,
+            files={
+                "file": (
+                    file.filename,
+                    word_bytes,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+            }
         )
 
-        if response.status_code != 200:
+        result_json = res.json()
+        print("API RESPONSE =", result_json)  # LOG AFFICHÉ DANS RAILWAY
+
+        # Vérification si ConvertAPI a vraiment retourné des fichiers
+        if "Files" not in result_json:
             return JSONResponse(
                 status_code=500,
                 content={
                     "error": "Conversion service failed",
-                    "details": response.text
+                    "api_response": result_json
                 }
             )
 
-        json_data = response.json()
-        pdf_url = json_data["Files"][0]["Url"]
+        pdf_url = result_json["Files"][0]["Url"]
+        pdf_bytes = requests.get(pdf_url).content
 
-        pdf_content = requests.get(pdf_url).content
-
-        output_path = f"/tmp/{file.filename.replace('.docx', '')}.pdf"
-        with open(output_path, "wb") as f:
-            f.write(pdf_content)
+        out_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        with open(out_pdf.name, "wb") as f:
+            f.write(pdf_bytes)
 
         return FileResponse(
-            output_path,
+            out_pdf.name,
             media_type="application/pdf",
             filename=file.filename.replace(".docx", ".pdf")
         )
 
- except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Word→PDF conversion failed", "details": str(e)}
-        )
+    except Exception as e:
+        return JSONResponse({"error": "Conversion failed", "details": str(e)}, status_code=500)

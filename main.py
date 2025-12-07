@@ -1,113 +1,109 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
-import uuid, os
-from PIL import Image
-import fitz  # PyMuPDF
-from docx import Document
-from docx.shared import Inches
+import tempfile
+from pdf2docx import Converter
+import pdfplumber
+import requests
+import os
+import uuid
 
 app = FastAPI()
 
-TMP_DIR = "/tmp/convertpro"
-os.makedirs(TMP_DIR, exist_ok=True)
+# Route test
+@app.get("/")
+def root():
+    return {"status": "ConvertPro API is running 🚀"}
 
 
+# ------- SIMPLE CONVERSION PDF ➝ WORD -------
 @app.post("/convert/pdf-to-word-pro")
-async def convert_pdf_word_image_based(file: UploadFile = File(...)):
+async def convert_pdf_to_word_pro(file: UploadFile = File(...)):
     try:
-        job_id = str(uuid.uuid4())
-        job_folder = os.path.join(TMP_DIR, job_id)
-        os.makedirs(job_folder, exist_ok=True)
+        # Sauvegarder PDF temporaire
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+            temp_pdf.write(await file.read())
+            temp_pdf_path = temp_pdf.name
 
-        pdf_path = os.path.join(job_folder, "input.pdf")
-        word_path = os.path.join(job_folder, "output.docx")
+        # Générer fichier Word de sortie
+        output_path = temp_pdf_path.replace(".pdf", ".docx")
 
-        # Save file
-        with open(pdf_path, "wb") as f:
-            f.write(await file.read())
+        # Conversion PDF -> Word
+        cv = Converter(temp_pdf_path)
+        cv.convert(output_path, start=0, end=None)
+        cv.close()
 
-        # Convert PDF to images
-        doc = fitz.open(pdf_path)
-        word_doc = Document()
-
-        for page_index in range(len(doc)):
-            page = doc.load_page(page_index)
-            pix = page.get_pixmap(dpi=200)
-
-            image_path = os.path.join(job_folder, f"page_{page_index}.png")
-            pix.save(image_path)
-
-            word_doc.add_picture(image_path, width=Inches(6.5))
-            word_doc.add_page_break()
-
-        word_doc.save(word_path)
-
+        # Envoyer le fichier converti
         return FileResponse(
-            word_path,
-            filename="converted_premium_visual.docx"
+            output_path,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=file.filename.replace(".pdf", ".docx")
         )
 
     except Exception as e:
-        return JSONResponse(
-            content={"error": "Internal conversion error", "details": str(e)},
-            status_code=500
-        )
-from pytesseract import image_to_string
-import requests
-import fitz
-from docx import Document
-from docx.shared import Inches
+        return JSONResponse({"error": "Conversion failed", "details": str(e)}, status_code=500)
+    finally:
+        # Nettoyage
+        try:
+            os.remove(temp_pdf_path)
+        except:
+            pass
 
+
+
+# ------- VERSION GOLD (OCR EXTERNE) -------
 @app.post("/convert/pdf-to-word-gold")
-async def convert_pdf_word_gold(file: UploadFile = File(...)):
+async def convert_pdf_to_word_gold(file: UploadFile = File(...)):
     try:
-        job_id = str(uuid.uuid4())
-        job_folder = os.path.join(TMP_DIR, job_id)
-        os.makedirs(job_folder, exist_ok=True)
+        # Sauvegarder le PDF temporairement
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+            temp_pdf.write(await file.read())
+            pdf_path = temp_pdf.name
 
-        pdf_path = os.path.join(job_folder, "input.pdf")
-        docx_path = os.path.join(job_folder, "output_gold.docx")
+        # Lire le PDF page par page pour extraire des images
+        extracted_text = ""
 
-        # Save uploaded PDF
-        with open(pdf_path, "wb") as f:
-            f.write(await file.read())
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                extracted_text += page.extract_text() or ""
 
-        pdf_doc = fitz.open(pdf_path)
-        document = Document()
+        # Si texte vide → OCR externe
+        if extracted_text.strip() == "":
+            # API gratuite OCR gratuite
+            # Endpoint public OCR.space
+            ocr_api_url = "https://api.ocr.space/parse/image"
 
-        for index, page in enumerate(pdf_doc):
-            pix = page.get_pixmap(dpi=200)
-            img_path = os.path.join(job_folder, f"page_{index}.png")
-            pix.save(img_path)
+            payload = {
+                "apikey": "helloworld",  # Clé publique gratuite
+                "language": "fre"
+            }
+            with open(pdf_path, 'rb') as f:
+                response = requests.post(ocr_api_url, files={"file": f}, data=payload)
+                ocr_result = response.json()
 
-            # OCR en ligne via API gratuite
-            with open(img_path, "rb") as img_file:
-                req = requests.post(
-                    "https://api.ocr.space/parse/image",
-                    files={"file": img_file},
-                    data={"language": "fre"},  # French OCR
-                )
+            if 'ParsedResults' in ocr_result:
+                extracted_text = ocr_result['ParsedResults'][0]['ParsedText']
 
-                ocr_data = req.json()
-                extracted_text = ""
+        # Générer Word
+        output_path = pdf_path.replace(".pdf", "-gold.docx")
+        try:
+            from docx import Document
+        except:
+            return {"error": "docx module missing"}
 
-                if "ParsedResults" in ocr_data:
-                    extracted_text = ocr_data["ParsedResults"][0]["ParsedText"]
-
-                if extracted_text.strip():
-                    document.add_paragraph(extracted_text)
-                else:
-                    document.add_picture(img_path, width=Inches(6))
-
-            document.add_page_break()
-
-        document.save(docx_path)
+        doc = Document()
+        doc.add_paragraph(extracted_text)
+        doc.save(output_path)
 
         return FileResponse(
-            docx_path,
-            filename="converted_gold.docx"
+            output_path,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=file.filename.replace(".pdf", "_gold.docx")
         )
 
     except Exception as e:
-        return {"error": str(e)}
-
+        return JSONResponse({"error": "Erreur GOLD", "details": str(e)}, status_code=500)
+    finally:
+        try:
+            os.remove(pdf_path)
+        except:
+            pass

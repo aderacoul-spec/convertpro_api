@@ -7,3 +7,4 @@ pillow
 openpyxl
 PyPDF2
 reportlab
+pdf2docx

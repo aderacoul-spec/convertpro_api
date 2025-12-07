@@ -7,3 +7,4 @@ pdf2docx
 pillow
 python-multipart
 PyMuPDF
+pytesseract

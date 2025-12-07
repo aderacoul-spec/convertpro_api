@@ -174,7 +174,7 @@ async def convert_word_to_pdf(file: UploadFile = File(...)):
             filename=file.filename.replace(".docx", ".pdf")
         )
 
-    except Exception as e:
+ except Exception as e:
         return JSONResponse(
             status_code=500,
             content={"error": "Word→PDF conversion failed", "details": str(e)}

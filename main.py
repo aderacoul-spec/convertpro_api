@@ -109,45 +109,56 @@ async def convert_img_to_pdf(file: UploadFile = File(...)):
 # ----------------------------------------------------------
 # WORD → PDF (API ConvertAPI)
 # ----------------------------------------------------------
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
+import uuid
 import requests
-import io
 
-app = FastAPI()
-
-api_secret = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
+CONVERT_API_SECRET = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
 
 @app.post("/convert/word-to-pdf")
-async def convert_word_to_pdf(file: UploadFile = File(...)):
+async def convert_word_to_pdf(file: UploadFile = File(...) ):
     try:
-        file_bytes = await file.read()
+        # 1. Sauvegarde temporaire du fichier envoyé
+        filename = f"temp_{uuid.uuid4()}.docx"
+        with open(filename, "wb") as f:
+            f.write(await file.read())
 
-        url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={api_secret}"
+        # 2. Appel API ConvertAPI
+        url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={CONVERT_API_SECRET}"
 
-        files = {
-            'file': (file.filename, file_bytes, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        }
+        with open(filename, 'rb') as f:
+            response = requests.post(
+                url,
+                files={'File': f}
+            )
 
-        response = requests.post(url, files=files)
-
+        # Vérification erreur API
         if response.status_code != 200:
             return {
-                "error": "Conversion échouée",
-                "details": response.json()
+                "error": "Conversion failed",
+                "details": response.text
             }
 
         result = response.json()
-        pdf_url = result["Files"][0]["Url"]  # on récupère le lien du PDF créé
 
-        pdf_download = requests.get(pdf_url)
+        # 3. Téléchargement du PDF généré
+        pdf_url = result['Files'][0]['Url']
+        pdf_filename = f"converted_{uuid.uuid4()}.pdf"
 
-        return StreamingResponse(
-            io.BytesIO(pdf_download.content),
+        pdf_data = requests.get(pdf_url)
+
+        with open(pdf_filename, "wb") as f:
+            f.write(pdf_data.content)
+
+        # 4. Retourne un vrai fichier PDF
+        return FileResponse(
+            pdf_filename,
             media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=converted.pdf"}
+            filename="converted.pdf"
         )
 
     except Exception as e:
-        return {"error": "Erreur interne", "details": str(e)}
-
+        return {
+            "error": "Word→PDF conversion failed",
+            "details": str(e)
+        }

@@ -6,4 +6,5 @@ PyPDF2
 pdf2docx
 pillow
 requests
+docx2pdf
 python-multipart

@@ -115,7 +115,7 @@ async def convert_word_to_pdf(file: UploadFile = File(...)):
         word_bytes = await file.read()
 
         # ⚠️ COLLE TON SECRET COMPLET EXACTEMENT ICI
-        api_secret = "LzWmFyBCAA0GGYxdXRCdu1SoL1oDdWt9"
+        api_secret = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
 
         api_url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={api_secret}"
 

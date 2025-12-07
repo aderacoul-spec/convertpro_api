@@ -143,10 +143,10 @@ async def convert_word_to_pdf(file: UploadFile = File(...)):
         }
 
         # ⚠ IMPORTANT — remplace XXXXX par ton vrai secret
-        api_secret = "XXXXX"
+        api_secret = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
 
         response = requests.post(
-            f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={LzWmFyBCAA0GGYxdXRCdu1SoL1oDdWt9}",
+            f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={api_secret}",
             files=files,
         )
 

@@ -115,6 +115,7 @@ async def convert_word_to_pdf(file: UploadFile = File(...)):
         file_bytes = await file.read()
         
         # Étape 1 : Upload vers ConvertAPI
+        api_secret = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
         upload_url = f"https://v2.convertapi.com/upload?Token={api_secret}"
         upload_response = requests.post(
             upload_url,

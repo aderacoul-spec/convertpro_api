@@ -142,25 +142,31 @@ async def convert_word_to_pdf(file: UploadFile = File(...)):
             )
         }
 
-        # ConvertAPI (gratuit quota)
+        # ⚠ IMPORTANT — remplace XXXXX par ton vrai secret
+        api_secret = "XXXXX"
+
         response = requests.post(
-            "https://v2.convertapi.com/convert/docx/to/pdf?Secret=7RzsgHQPkhrDoQyq",
+            f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={LzWmFyBCAA0GGYxdXRCdu1SoL1oDdWt9}",
             files=files,
         )
 
         if response.status_code != 200:
             return JSONResponse(
                 status_code=500,
-                content={"error": "Conversion service failed", "details": response.text}
+                content={
+                    "error": "Conversion service failed",
+                    "details": response.text
+                }
             )
 
-        pdf_url = response.json()["Files"][0]["Url"]
+        json_data = response.json()
+        pdf_url = json_data["Files"][0]["Url"]
 
-        pdf_data = requests.get(pdf_url).content
+        pdf_content = requests.get(pdf_url).content
 
         output_path = f"/tmp/{file.filename.replace('.docx', '')}.pdf"
         with open(output_path, "wb") as f:
-            f.write(pdf_data)
+            f.write(pdf_content)
 
         return FileResponse(
             output_path,
@@ -169,5 +175,7 @@ async def convert_word_to_pdf(file: UploadFile = File(...)):
         )
 
     except Exception as e:
-        return JSONResponse(status_code=500,
-            content={"error": "Word→PDF conversion failed", "details": str(e)})
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Word→PDF conversion failed", "details": str(e)}
+        )

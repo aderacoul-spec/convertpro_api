@@ -49,3 +49,29 @@ async def convert_pdf_word(file: UploadFile = File(...)):
         filename="converted_stable.docx",
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
+from pdf2docx import Converter
+
+@app.post("/convert/pdf-to-word-pro")
+async def convert_pdf_to_word_pro(file: UploadFile = File(...)):
+    job_id = str(uuid.uuid4())
+    job_folder = os.path.join(TMP_DIR, job_id)
+    os.makedirs(job_folder, exist_ok=True)
+
+    pdf_path = os.path.join(job_folder, "input.pdf")
+    word_path = os.path.join(job_folder, "output_pro.docx")
+
+    # Enregistrement du fichier envoyé
+    with open(pdf_path, "wb") as f:
+        f.write(await file.read())
+
+    # Conversion PRO
+    cv = Converter(pdf_path)
+    cv.convert(word_path)
+    cv.close()
+
+    # Retour du fichier Word
+    return FileResponse(
+        word_path,
+        filename="converted_premium.docx",
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )

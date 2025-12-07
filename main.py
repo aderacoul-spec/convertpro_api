@@ -6,7 +6,15 @@ from pdf2docx import Converter
 import pdfplumber
 from docx import Document
 import requests
-
+app = FastAPI()
+# 🔓 Autoriser ton site à appeler l’API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # tu pourras ensuite mettre ["https://convertpro.shop"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app = FastAPI()
 
 

@@ -52,3 +52,42 @@ async def convert_pdf_word_image_based(file: UploadFile = File(...)):
             content={"error": "Internal conversion error", "details": str(e)},
             status_code=500
         )
+from pytesseract import image_to_string
+
+@app.post("/convert/pdf-to-word-gold")
+async def convert_pdf_word_gold(file: UploadFile = File(...)):
+    try:
+        job_id = str(uuid.uuid4())
+        job_folder = os.path.join(TMP_DIR, job_id)
+        os.makedirs(job_folder, exist_ok=True)
+
+        pdf_path = os.path.join(job_folder, "input.pdf")
+        word_path = os.path.join(job_folder, "output_gold.docx")
+
+        with open(pdf_path, "wb") as f:
+            f.write(await file.read())
+
+        # Convert page-by-page
+        doc = fitz.open(pdf_path)
+        word_doc = Document()
+
+        for index, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=200)
+            img_path = os.path.join(job_folder, f"page_{index}.png")
+            pix.save(img_path)
+
+            # OCR
+            extracted_text = image_to_string(img_path, lang="fra")
+
+            word_doc.add_paragraph(extracted_text)
+            word_doc.add_page_break()
+
+        word_doc.save(word_path)
+
+        return FileResponse(
+            word_path,
+            filename="converted_gold.docx"
+        )
+
+    except Exception as e:
+        return {"error": str(e)}

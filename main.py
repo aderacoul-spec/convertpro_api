@@ -53,6 +53,10 @@ async def convert_pdf_word_image_based(file: UploadFile = File(...)):
             status_code=500
         )
 from pytesseract import image_to_string
+import requests
+import fitz
+from docx import Document
+from docx.shared import Inches
 
 @app.post("/convert/pdf-to-word-gold")
 async def convert_pdf_word_gold(file: UploadFile = File(...)):
@@ -62,32 +66,48 @@ async def convert_pdf_word_gold(file: UploadFile = File(...)):
         os.makedirs(job_folder, exist_ok=True)
 
         pdf_path = os.path.join(job_folder, "input.pdf")
-        word_path = os.path.join(job_folder, "output_gold.docx")
+        docx_path = os.path.join(job_folder, "output_gold.docx")
 
+        # Save uploaded PDF
         with open(pdf_path, "wb") as f:
             f.write(await file.read())
 
-        # Convert page-by-page
-        doc = fitz.open(pdf_path)
-        word_doc = Document()
+        pdf_doc = fitz.open(pdf_path)
+        document = Document()
 
-        for index, page in enumerate(doc):
+        for index, page in enumerate(pdf_doc):
             pix = page.get_pixmap(dpi=200)
             img_path = os.path.join(job_folder, f"page_{index}.png")
             pix.save(img_path)
 
-            # OCR
-            extracted_text = image_to_string(img_path, lang="fra")
+            # OCR en ligne via API gratuite
+            with open(img_path, "rb") as img_file:
+                req = requests.post(
+                    "https://api.ocr.space/parse/image",
+                    files={"file": img_file},
+                    data={"language": "fre"},  # French OCR
+                )
 
-            word_doc.add_paragraph(extracted_text)
-            word_doc.add_page_break()
+                ocr_data = req.json()
+                extracted_text = ""
 
-        word_doc.save(word_path)
+                if "ParsedResults" in ocr_data:
+                    extracted_text = ocr_data["ParsedResults"][0]["ParsedText"]
+
+                if extracted_text.strip():
+                    document.add_paragraph(extracted_text)
+                else:
+                    document.add_picture(img_path, width=Inches(6))
+
+            document.add_page_break()
+
+        document.save(docx_path)
 
         return FileResponse(
-            word_path,
+            docx_path,
             filename="converted_gold.docx"
         )
 
     except Exception as e:
         return {"error": str(e)}
+

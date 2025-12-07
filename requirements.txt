@@ -6,3 +6,4 @@ PyPDF2
 pdf2docx
 pillow
 python-multipart
+PyMuPDF

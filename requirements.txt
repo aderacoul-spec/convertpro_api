@@ -5,6 +5,5 @@ pdfplumber
 PyPDF2
 pdf2docx
 pillow
-python-multipart
 requests
-PyMuPDF
+python-multipart

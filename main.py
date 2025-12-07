@@ -112,49 +112,46 @@ async def convert_img_to_pdf(file: UploadFile = File(...)):
 @app.post("/convert/word-to-pdf")
 async def convert_word_to_pdf(file: UploadFile = File(...)):
     try:
-        word_bytes = await file.read()
-
-        # ⚠️ COLLE TON SECRET COMPLET EXACTEMENT ICI
-        api_secret = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
-
-        api_url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={api_secret}"
-
-        res = requests.post(
-            api_url,
-            files={
-                "file": (
-                    file.filename,
-                    word_bytes,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-            }
+        file_bytes = await file.read()
+        
+        # Étape 1 : Upload vers ConvertAPI
+        upload_url = f"https://v2.convertapi.com/upload?Token={api_secret}"
+        upload_response = requests.post(
+            upload_url,
+            files={"file": (file.filename, file_bytes)}
         )
 
-        result_json = res.json()
-        print("API RESPONSE =", result_json)  # LOG AFFICHÉ DANS RAILWAY
+        upload_json = upload_response.json()
+        
+        if "FileId" not in upload_json:
+            return {"error": "Upload failed", "details": upload_json}
 
-        # Vérification si ConvertAPI a vraiment retourné des fichiers
-        if "Files" not in result_json:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "Conversion service failed",
-                    "api_response": result_json
-                }
-            )
+        file_id = upload_json["FileId"]
 
-        pdf_url = result_json["Files"][0]["Url"]
-        pdf_bytes = requests.get(pdf_url).content
+        # Étape 2 : Conversion via ConvertAPI (DOCX → PDF)
+        conversion_url = (
+            f"https://v2.convertapi.com/convert/word/to/pdf"
+            f"?Token={api_secret}&FileId={file_id}"
+        )
 
-        out_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        with open(out_pdf.name, "wb") as f:
-            f.write(pdf_bytes)
+        result_response = requests.get(conversion_url)
+        result_json = result_response.json()
 
-        return FileResponse(
-            out_pdf.name,
+        # On vérifie si l'API renvoie bien le champ Url
+        if "Url" not in result_json:
+            return {"error": "Conversion failed", "details": result_json}
+
+        pdf_url = result_json["Url"]
+
+        # Téléchargement du résultat PDF
+        output_bytes = requests.get(pdf_url).content
+        output_filename = file.filename.replace(".docx", "") + ".pdf"
+
+        return StreamingResponse(
+            io.BytesIO(output_bytes),
             media_type="application/pdf",
-            filename=file.filename.replace(".docx", ".pdf")
+            headers={"Content-Disposition": f"attachment; filename={output_filename}"}
         )
 
     except Exception as e:
-        return JSONResponse({"error": "Conversion failed", "details": str(e)}, status_code=500)
+        return {"error": "Conversion failed", "details": str(e)}

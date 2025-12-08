@@ -109,42 +109,57 @@ async def convert_img_to_pdf(file: UploadFile = File(...)):
 # ----------------------------------------------------------
 # WORD → PDF (API ConvertAPI)
 # ----------------------------------------------------------
-from fastapi import File, UploadFile
-import requests
-import uuid
-import shutil
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import FileResponse
 import os
+import uuid
+import requests
+import shutil
 
+app = FastAPI()
+
+# 🔥 Mets ta vraie clé ConvertAPI ici
 CONVERTAPI_TOKEN = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
+
+
+@app.get("/")
+def root():
+    return {"status": "API is running"}
+
 
 @app.post("/convert/word-to-pdf")
 async def convert_word_to_pdf(file: UploadFile = File(...)):
     try:
+        # 1️⃣ Sauvegarde temporaire du fichier Word
         temp_input = f"/tmp/{uuid.uuid4()}.docx"
         with open(temp_input, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={CONVERTAPI_TOKEN}"
+        # 2️⃣ Appel ConvertAPI
+        convert_url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={CONVERTAPI_TOKEN}"
 
-        with open(temp_input, "rb") as f:
-            res = requests.post(url, files={"file": f})
+        with open(temp_input, "rb") as doc_file:
+            res = requests.post(convert_url, files={"file": doc_file})
 
+        # 3️⃣ Lecture de la réponse JSON
         data = res.json()
 
+        # Si ConvertAPI n'a pas converti :
         if "Files" not in data:
             return {
                 "error": "Conversion failed",
                 "details": data
             }
 
+        # 4️⃣ Téléchargement du PDF converti
         pdf_url = data["Files"][0]["Url"]
+        pdf_response = requests.get(pdf_url)
 
         temp_output = f"/tmp/{uuid.uuid4()}.pdf"
-        pdf_data = requests.get(pdf_url)
-
         with open(temp_output, "wb") as f:
-            f.write(pdf_data.content)
+            f.write(pdf_response.content)
 
+        # 5️⃣ Retourne le PDF final
         return FileResponse(
             temp_output,
             filename="converted.pdf",

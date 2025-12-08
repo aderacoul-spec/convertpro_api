@@ -125,6 +125,10 @@ async def convert_word_to_pdf(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, f)
 
         url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={CONVERTAPI_TOKEN}"
+        url -X POST https :v2.convertapi.com/convert/docx/to/pdf \
+ -H « Autorisation : Porteur LzWmFyBCAA0GGYxdXRCdu1SoL1oDdWt9 » \
+ -F « StoreFile=true » \
+ -F « File=@/path/to/my_file.doc » 
 
         with open(temp_input, "rb") as f:
             res = requests.post(url, files={"file": f})

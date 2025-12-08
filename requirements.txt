@@ -4,3 +4,4 @@ python-multipart
 pillow
 pdf2docx
 PyPDF2
+requests

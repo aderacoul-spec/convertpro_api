@@ -115,47 +115,38 @@ import uuid
 import shutil
 import os
 
-CONVERTAPI_TOKEN = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"  # Remplace ici ta clé ConvertAPI
+CONVERTAPI_TOKEN = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
 
 @app.post("/convert/word-to-pdf")
 async def convert_word_to_pdf(file: UploadFile = File(...)):
     try:
-        # 1️⃣ Sauvegarde temporaire du fichier Word
         temp_input = f"/tmp/{uuid.uuid4()}.docx"
         with open(temp_input, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        # 2️⃣ URL officielle ConvertAPI
         url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={CONVERTAPI_TOKEN}"
 
         with open(temp_input, "rb") as f:
-            res = requests.post(
-                url,
-                files={"file": f}
-            )
+            res = requests.post(url, files={"file": f})
 
         data = res.json()
 
-        # 🛑 Si erreur API → renvoyer message
         if "Files" not in data:
             return {
                 "error": "Conversion failed",
                 "details": data
             }
 
-        # 3️⃣ Récupération du lien PDF
         pdf_url = data["Files"][0]["Url"]
 
-        # 4️⃣ Téléchargement du PDF en local
         temp_output = f"/tmp/{uuid.uuid4()}.pdf"
         pdf_data = requests.get(pdf_url)
 
         with open(temp_output, "wb") as f:
             f.write(pdf_data.content)
 
-        # 5️⃣ Retourne le PDF converti
         return FileResponse(
-            path=temp_output,
+            temp_output,
             filename="converted.pdf",
             media_type="application/pdf"
         )

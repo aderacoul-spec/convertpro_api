@@ -109,52 +109,55 @@ async def convert_img_to_pdf(file: UploadFile = File(...)):
 # ----------------------------------------------------------
 # WORD → PDF (API ConvertAPI)
 # ----------------------------------------------------------
-from fastapi.responses import FileResponse
-import uuid
+from fastapi import File, UploadFile
 import requests
+import uuid
+import shutil
+import os
 
-CONVERT_API_SECRET = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"
+CONVERTAPI_TOKEN = "LzWmFyBCAA0GGYxdXRCdu1SoL1oDdWt9"  # Remplace ici ta clé ConvertAPI
 
 @app.post("/convert/word-to-pdf")
-async def convert_word_to_pdf(file: UploadFile = File(...) ):
+async def convert_word_to_pdf(file: UploadFile = File(...)):
     try:
-        # 1. Sauvegarde temporaire du fichier envoyé
-        filename = f"temp_{uuid.uuid4()}.docx"
-        with open(filename, "wb") as f:
-            f.write(await file.read())
+        # 1️⃣ Sauvegarde temporaire du fichier Word
+        temp_input = f"/tmp/{uuid.uuid4()}.docx"
+        with open(temp_input, "wb") as f:
+            shutil.copyfileobj(file.file, f)
 
-        # 2. Appel API ConvertAPI
-        url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={CONVERT_API_SECRET}"
+        # 2️⃣ URL officielle ConvertAPI
+        url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={CONVERTAPI_TOKEN}"
 
-        with open(filename, 'rb') as f:
-            response = requests.post(
+        with open(temp_input, "rb") as f:
+            res = requests.post(
                 url,
-                files={'File': f}
+                files={"file": f}
             )
 
-        # Vérification erreur API
-        if response.status_code != 200:
+        data = res.json()
+
+        # 🛑 Si erreur API → renvoyer message
+        if "Files" not in data:
             return {
                 "error": "Conversion failed",
-                "details": response.text
+                "details": data
             }
 
-        result = response.json()
+        # 3️⃣ Récupération du lien PDF
+        pdf_url = data["Files"][0]["Url"]
 
-        # 3. Téléchargement du PDF généré
-        pdf_url = result['Files'][0]['Url']
-        pdf_filename = f"converted_{uuid.uuid4()}.pdf"
-
+        # 4️⃣ Téléchargement du PDF en local
+        temp_output = f"/tmp/{uuid.uuid4()}.pdf"
         pdf_data = requests.get(pdf_url)
 
-        with open(pdf_filename, "wb") as f:
+        with open(temp_output, "wb") as f:
             f.write(pdf_data.content)
 
-        # 4. Retourne un vrai fichier PDF
+        # 5️⃣ Retourne le PDF converti
         return FileResponse(
-            pdf_filename,
-            media_type="application/pdf",
-            filename="converted.pdf"
+            path=temp_output,
+            filename="converted.pdf",
+            media_type="application/pdf"
         )
 
     except Exception as e:

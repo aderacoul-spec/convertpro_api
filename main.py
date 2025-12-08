@@ -109,7 +109,11 @@ async def convert_img_to_pdf(file: UploadFile = File(...)):
 # ----------------------------------------------------------
 # WORD → PDF (API ConvertAPI)
 # ----------------------------------------------------------
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import FileResponse
+import os
 
+app = FastAPI()
 @app.post("/convert/word-to-pdf")
 async def word_to_pdf(file: UploadFile = File(...)):
     try:

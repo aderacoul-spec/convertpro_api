@@ -1,4 +1,46 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import FileResponse
+import os
+
+app = FastAPI()
+
+
+@app.get("/")
+def home():
+    return {"message": "ConvertPro API Running"}
+
+
+@app.post("/convert/word-to-pdf")
+async def word_to_pdf(file: UploadFile = File(...)):
+    try:
+        # Sauvegarde du fichier reçu localement
+        input_path = f"/convert/{file.filename}"
+
+        with open(input_path, "wb") as buffer:
+            buffer.write(await file.read())
+
+        # Output PDF path
+        output_path = input_path.replace(".docx", ".pdf").replace(".doc", ".pdf")
+
+        # Conversion via unoconv (en Ubuntu)
+        convert = os.system(f"unoconv -f pdf '{input_path}'")
+
+        if convert != 0:
+            return {
+                "error": "Conversion ratée",
+                "details": "unoconv a échoué à convertir le fichier"
+            }
+
+        # Retourner le fichier PDF généré
+        return FileResponse(
+            output_path,
+            filename=os.path.basename(output_path),
+            media_type="application/pdf"
+        )
+
+    except Exception as e:
+        return {"error": "Erreur interne", "details": str(e)}
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile

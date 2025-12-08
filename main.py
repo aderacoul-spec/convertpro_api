@@ -155,31 +155,32 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse
 import os
 
-app = FastAPI()
 @app.post("/convert/word-to-pdf")
 async def word_to_pdf(file: UploadFile = File(...)):
     try:
-        # 1) Sauvegarde du fichier reçu
-        input_path = f"/convert/{file.filename}"
+        # Sauvegarde du fichier reçu localement 🤝
+        input_path = f"/tmp/{file.filename}"
+
         with open(input_path, "wb") as buffer:
             buffer.write(await file.read())
 
-        # 2) Conversion avec unoconv
+        # Output PDF
         output_path = input_path.replace(".docx", ".pdf").replace(".doc", ".pdf")
 
-        result = os.system(f"unoconv -f pdf {input_path}")
+        # Conversion Ubuntu (DOIT ÊTRE INSTALLÉ EN LOCAL)
+        convert = os.system(f"unoconv -f pdf '{input_path}'")
 
-        if result != 0:
+        if convert != 0:
             return {
                 "error": "Conversion ratée",
                 "details": "unoconv n'a pas pu convertir le fichier"
             }
 
-        # 3) Retour du fichier converti
+        # Retourner le fichier PDF généré
         return FileResponse(
             output_path,
-            media_type="application/pdf",
-            filename=os.path.basename(output_path)
+            filename=os.path.basename(output_path),
+            media_type="application/pdf"
         )
 
     except Exception as e:

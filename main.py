@@ -115,7 +115,7 @@ import uuid
 import shutil
 import os
 
-CONVERTAPI_TOKEN = "LzWmFyBCAA0GGYxdXRCdu1SoL1oDdWt9"  # Remplace ici ta clé ConvertAPI
+CONVERTAPI_TOKEN = "Zavgn278zoIRqoo7r1s5aXnEtxHIBFww"  # Remplace ici ta clé ConvertAPI
 
 @app.post("/convert/word-to-pdf")
 async def convert_word_to_pdf(file: UploadFile = File(...)):

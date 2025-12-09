@@ -155,33 +155,28 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse
 import os
 
-@app.post("/convert/word-to-pdf")
-async def word_to_pdf(file: UploadFile = File(...)):
+@app.post("/convert/word-to-pdf-pandoc")
+async def convert_word_to_pdf(file: UploadFile = File(...)):
     try:
-        # Sauvegarde du fichier reçu localement 🤝
         input_path = f"/tmp/{file.filename}"
+        output_path = input_path.replace(".docx", ".pdf")
 
-        with open(input_path, "wb") as buffer:
-            buffer.write(await file.read())
+        # Save uploaded file temporarily
+        with open(input_path, "wb") as f:
+            f.write(await file.read())
 
-        # Output PDF
-        output_path = input_path.replace(".docx", ".pdf").replace(".doc", ".pdf")
+        # Pandoc conversion command
+        command = f"pandoc '{input_path}' -o '{output_path}' --pdf-engine=xelatex"
+        os.system(command)
 
-        # Conversion Ubuntu (DOIT ÊTRE INSTALLÉ EN LOCAL)
-        convert = os.system(f"unoconv -f pdf '{input_path}'")
+        # Check if PDF has been generated
+        if not os.path.exists(output_path):
+            raise Exception("Pandoc conversion failed")
 
-        if convert != 0:
-            return {
-                "error": "Conversion ratée",
-                "details": "unoconv n'a pas pu convertir le fichier"
-            }
-
-        # Retourner le fichier PDF généré
-        return FileResponse(
-            output_path,
-            filename=os.path.basename(output_path),
-            media_type="application/pdf"
-        )
+        return FileResponse(output_path, filename=os.path.basename(output_path))
 
     except Exception as e:
-        return {"error": "Erreur interne", "details": str(e)}
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Conversion Pandoc échouée", "details": str(e)},
+        )
